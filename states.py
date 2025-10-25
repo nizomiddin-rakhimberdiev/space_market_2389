@@ -12,3 +12,8 @@ class AddProductState(StatesGroup):
     product_description = State()
     product_price = State()
     product_image = State()
+
+class AddCartState(StatesGroup):
+    category = State()
+    product = State()
+    add_to_cart = State()

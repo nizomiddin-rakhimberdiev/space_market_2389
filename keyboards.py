@@ -16,3 +16,14 @@ admin_menu = ReplyKeyboardMarkup(
         ]
     ]
 )
+
+odamlar_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+                KeyboardButton(text="Maxsulotlar"),
+                KeyboardButton(text="Savatcha"),
+                KeyboardButton(text="Buyurtmalarim")
+        ]
+    ], resize_keyboard=True
+)
+

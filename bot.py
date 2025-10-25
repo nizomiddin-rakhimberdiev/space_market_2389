@@ -1,17 +1,18 @@
 from aiogram import Dispatcher, Bot, types, F
 import asyncio
 from aiogram.fsm.context import FSMContext
-from states import AddUserState, AddCategoryState, AddProductState
-from keyboards import phone_btn, admin_menu
-from inline_keyboards import get_categories_keyboard
+from states import AddUserState, AddCategoryState, AddProductState, AddCartState
+from keyboards import phone_btn, admin_menu, odamlar_menu
+from inline_keyboards import get_categories_keyboard, get_products_keyboard, build_qty_keyboard, add_to_cart_btn
 from database import Database
+import requests
 
 
 bot = Bot(token="8432374022:AAGGJ4wou8QzCycOXNYKJYb9kBeghk7arnE")
 dp = Dispatcher()
 db = Database()
 
-ADMINS = [726130790, 231515355]
+ADMINS = [726130791, 231515355]
 
 @dp.message(F.text=='/start')
 async def start(message: types.Message, state: FSMContext):
@@ -21,7 +22,7 @@ async def start(message: types.Message, state: FSMContext):
     else:
         user = db.get_user(user_id)
         if user:
-            await message.answer("Assalamu alaykum bratiiim")
+            await message.answer("Assalamu alaykum bratiiim", reply_markup=odamlar_menu)
         else:
             await message.answer("Iltimos telefon raqamingizni ulashing", reply_markup=phone_btn)
             await state.set_state(AddUserState.phone_number)
@@ -108,6 +109,55 @@ async def product_image_handler(message: types.Message, state: FSMContext):
     await message.answer(f"{product_name} nomli mahsulot qo'shildi")
     await state.clear()
 
+@dp.message(F.text=='Maxsulotlar')
+async def category_state_handler(message: types.Message, state: FSMContext):
+    await message.answer("Kategoriyalardan birini tanlang: ", reply_markup=get_categories_keyboard())
+    await state.set_state(AddCartState.category)
+
+@dp.callback_query(F.data.startswith('category_'), AddCartState.category)
+async def category_state_handler(call: types.CallbackQuery, state: FSMContext):
+    category_id = int(call.data.split('_')[1])
+    products_keys = get_products_keyboard(category_id)
+    await call.message.answer("Maxsulitlardan birini tanla karoche: ", reply_markup=products_keys)
+    await state.set_state(AddCartState.product)
+
+@dp.callback_query(F.data.startswith('product_'), AddCartState.product)
+async def category_state_handler(call: types.CallbackQuery, state: FSMContext):
+    product_id = int(call.data.split("_")[1])
+    product = db.get_product(product_id)
+    print(product)
+
+    name = product[2]
+    description = product[3]
+    price = product[4]
+    image = product[5]  
+
+    # Caption 1024 belgidan oshmasligi kerak
+    short_caption = f"{name}\nNarxi: {price:,.0f} so'm"
+    if len(short_caption) > 1024:
+        short_caption = short_caption[:1020] + "..."
+
+    response = requests.get(image)
+    image_path = f"/tmp/product_{product_id}.jpg"
+    with open(image_path, "wb") as f:
+        f.write(response.content)
+
+    # FSInputFile orqali yuborish
+    image_file = types.FSInputFile(image_path)
+    # Avval rasm bilan qisqa caption yuboramiz
+    await call.message.answer_photo(
+        photo=image_file,
+        caption=short_caption,
+        reply_markup=add_to_cart_btn(product_id)
+    )
+
+    # Keyin to‘liq tavsifni alohida matn sifatida yuboramiz (agar juda uzun bo‘lsa)
+    if len(description) > 0:
+        chunks = [description[i:i+4000] for i in range(0, len(description), 4000)]
+        for chunk in chunks:
+            await call.message.answer(chunk)
+
+    await state.set_state(AddCartState.add_to_cart)
 
 
 
