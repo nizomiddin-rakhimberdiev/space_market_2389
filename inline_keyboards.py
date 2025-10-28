@@ -41,12 +41,12 @@ def build_qty_keyboard(pid: int, q: int):
     return builder.as_markup()
 
 
-def add_to_cart_btn(product_id):
+def add_to_cart_btn(product_id, count=1):
     add_to_cart = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text='-', callback_data=f"minus_{product_id}"),
-                InlineKeyboardButton(text='1', callback_data=f"count_{product_id}"),
+                InlineKeyboardButton(text=str(count), callback_data=f"count_{product_id}"),
                 InlineKeyboardButton(text='+', callback_data=f"plus_{product_id}"),
             ],
             [

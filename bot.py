@@ -153,6 +153,23 @@ async def category_state_handler(call: types.CallbackQuery, state: FSMContext):
 
     await state.set_state(AddCartState.add_to_cart)
 
+@dp.callback_query(F.data.startswith('plus_'))
+async def decrease_quantity(call: types.CallbackQuery, state: FSMContext):
+    product_id = int(call.data.split("_")[1])
+    count = int(call.message.reply_markup.inline_keyboard[0][1].text)
+    count += 1
+    await call.message.edit_reply_markup(reply_markup=add_to_cart_btn(product_id, count))
+
+@dp.callback_query(F.data.startswith('minus_'))
+async def decrease_quantity(call: types.CallbackQuery, state: FSMContext):
+    product_id = int(call.data.split("_")[1])
+    count = int(call.message.reply_markup.inline_keyboard[0][1].text)
+    if count > 1:
+        count -= 1
+    await call.message.edit_reply_markup(reply_markup=add_to_cart_btn(product_id, count))
+
+
+
 
 
 async def main():
