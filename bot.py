@@ -6,13 +6,26 @@ from keyboards import phone_btn, admin_menu, odamlar_menu
 from inline_keyboards import get_categories_keyboard, get_products_keyboard, build_qty_keyboard, add_to_cart_btn
 from database import Database
 import requests
-
+import os
 
 bot = Bot(token="8432374022:AAGGJ4wou8QzCycOXNYKJYb9kBeghk7arnE")
 dp = Dispatcher()
 db = Database()
 
 ADMINS = [726130791, 231515355]
+
+async def download_photo(file_id: str, bot: Bot, save_dir: str = "images") -> str:
+    file = await bot.get_file(file_id)
+    file_path = file.file_path
+    file_name = file_path.split("/")[-1]
+
+    # Saqlash papkasini yaratish
+    os.makedirs(save_dir, exist_ok=True)
+
+    destination = os.path.join(save_dir, file_name)
+
+    await bot.download_file(file_path, destination)
+    return destination  # Bu path ni bazaga saqlaysiz
 
 @dp.message(F.text=='/start')
 async def start(message: types.Message, state: FSMContext):
@@ -94,18 +107,17 @@ async def product_price_handler(message: types.Message, state: FSMContext):
 
 @dp.message(AddProductState.product_image, F.photo)
 async def product_image_handler(message: types.Message, state: FSMContext):
-    photo = message.photo[-1]
-    file_info = await bot.get_file(photo.file_id)
-    file_path = file_info.file_path
-    image_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
-
+    file_id = message.photo[-1].file_id
+    photo = await download_photo(file_id, bot)
+    print(photo)
+    await state.update_data(image=photo)
     data = await state.get_data()
     category_id = data['category_id']
     product_name = data['product_name']
     product_description = data['product_description']
     product_price = data['product_price']
 
-    db.add_product(category_id, product_name, product_description, product_price, image_url)
+    db.add_product(category_id, product_name, product_description, product_price, photo)
     await message.answer(f"{product_name} nomli mahsulot qo'shildi")
     await state.clear()
 
@@ -121,41 +133,23 @@ async def category_state_handler(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer("Maxsulitlardan birini tanla karoche: ", reply_markup=products_keys)
     await state.set_state(AddCartState.product)
 
+import requests
+import os
+from aiogram import types
+from aiogram.types import FSInputFile
+
 @dp.callback_query(F.data.startswith('product_'), AddCartState.product)
 async def category_state_handler(call: types.CallbackQuery, state: FSMContext):
     product_id = int(call.data.split("_")[1])
     product = db.get_product(product_id)
-    print(product)
-
     name = product[2]
-    description = product[3]
+    description = product[3] or ""
     price = product[4]
-    image = product[5]  
+    image_path = product[5]
+    image = types.FSInputFile(image_path)
+    caption = f"Nom: {name}\n\nTavsif: {description}\n\nNarx: {price} so'm"
+    await call.message.answer_photo(photo=image, caption=caption, reply_markup=add_to_cart_btn(product_id))
 
-    # Caption 1024 belgidan oshmasligi kerak
-    short_caption = f"{name}\nNarxi: {price:,.0f} so'm"
-    if len(short_caption) > 1024:
-        short_caption = short_caption[:1020] + "..."
-
-    response = requests.get(image)
-    image_path = f"/tmp/product_{product_id}.jpg"
-    with open(image_path, "wb") as f:
-        f.write(response.content)
-
-    # FSInputFile orqali yuborish
-    image_file = types.FSInputFile(image_path)
-    # Avval rasm bilan qisqa caption yuboramiz
-    await call.message.answer_photo(
-        photo=image_file,
-        caption=short_caption,
-        reply_markup=add_to_cart_btn(product_id)
-    )
-
-    # Keyin to‘liq tavsifni alohida matn sifatida yuboramiz (agar juda uzun bo‘lsa)
-    if len(description) > 0:
-        chunks = [description[i:i+4000] for i in range(0, len(description), 4000)]
-        for chunk in chunks:
-            await call.message.answer(chunk)
 
     await state.set_state(AddCartState.add_to_cart)
 
