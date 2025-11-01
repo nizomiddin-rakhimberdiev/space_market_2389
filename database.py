@@ -83,3 +83,7 @@ class Database:
     
     def close(self):
         self.con.close()
+
+    def get_user_ids(self):
+        self.cursor.execute("SELECT user_id FROM users;")
+        return self.cursor.fetchall()

@@ -1,7 +1,7 @@
 from aiogram import Dispatcher, Bot, types, F
 import asyncio
 from aiogram.fsm.context import FSMContext
-from states import AddUserState, AddCategoryState, AddProductState, AddCartState
+from states import AddUserState, AddCategoryState, AddProductState, AddCartState, AdState
 from keyboards import phone_btn, admin_menu, odamlar_menu
 from inline_keyboards import get_categories_keyboard, get_products_keyboard, build_qty_keyboard, add_to_cart_btn
 from database import Database
@@ -12,7 +12,7 @@ bot = Bot(token="8432374022:AAGGJ4wou8QzCycOXNYKJYb9kBeghk7arnE")
 dp = Dispatcher()
 db = Database()
 
-ADMINS = [726130791, 231515355]
+ADMINS = [726130790, 231515355]
 
 async def download_photo(file_id: str, bot: Bot, save_dir: str = "images") -> str:
     file = await bot.get_file(file_id)
@@ -39,6 +39,32 @@ async def start(message: types.Message, state: FSMContext):
         else:
             await message.answer("Iltimos telefon raqamingizni ulashing", reply_markup=phone_btn)
             await state.set_state(AddUserState.phone_number)
+
+@dp.message(F.text=='/reklama')
+async def reklama_handler(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    if user_id in ADMINS:
+        await message.answer("Reklama uchun rasm kiriting: ")
+        await state.set_state(AdState.image)
+
+@dp.message(AdState.image)
+async def nimasansd(message: types.Message, state: FSMContext):
+    file_id = message.photo[-1].file_id
+    photo = await download_photo(file_id, bot)
+    print(photo)
+    await state.update_data(image=photo)
+    await message.answer("Reklama uchun text kiriting: ")
+    await state.set_state(AdState.text)
+
+@dp.message(AdState.text)
+async def nimasansd(message: types.Message, state: FSMContext):
+    text = message.text
+    data = await state.get_data()
+    image_url = data['image']
+    image = types.FSInputFile(image_url)
+    for user in db.get_user_ids():
+        await bot.send_photo(chat_id=user[0], photo=image, caption=text)
+    state.clear()
 
 @dp.message(AddUserState.phone_number)
 async def add_user_phone(message: types.Message, state: FSMContext):
@@ -169,6 +195,17 @@ async def decrease_quantity(call: types.CallbackQuery, state: FSMContext):
     await call.message.edit_reply_markup(reply_markup=add_to_cart_btn(product_id, count))
 
 
+@dp.callback_query(F.data.startswith('add_to_cart_'), AddCartState.add_to_cart)
+async def add_to_cart_handler(call: types.CallbackQuery, state: FSMContext):
+    product_id = int(call.data.split("_")[3])
+    count = int(call.message.reply_markup.inline_keyboard[0][1].text)
+    product = db.get_product(product_id)
+    price = product[4]
+    total_price = price * count
+    user_id = call.from_user.id
+    db.add_cart_item(user_id, product_id, count, total_price)
+    await call.message.answer(f"Mahsulot savatchaga qo'shildi: {count} ta, jami narxi: {total_price} so'm")
+    state.clear()
 
 
 

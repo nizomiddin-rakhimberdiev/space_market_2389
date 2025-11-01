@@ -17,3 +17,9 @@ class AddCartState(StatesGroup):
     category = State()
     product = State()
     add_to_cart = State()
+
+class AdState(StatesGroup):
+    image = State()
+    text = State()
+
+    
